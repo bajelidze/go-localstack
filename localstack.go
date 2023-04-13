@@ -21,6 +21,11 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
+	"io"
+	"log"
+	"sync"
+	"time"
+
 	"github.com/Masterminds/semver/v3"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -32,10 +37,6 @@ import (
 	"github.com/docker/docker/client"
 	"github.com/docker/go-connections/nat"
 	"github.com/sirupsen/logrus"
-	"io"
-	"log"
-	"sync"
-	"time"
 
 	"github.com/elgohr/go-localstack/internal"
 )
@@ -51,6 +52,7 @@ type Instance struct {
 	version          string
 	fixedPort        bool
 	timeout          time.Duration
+	env              []string
 }
 
 // InstanceOption is an option that controls the behaviour of
@@ -85,6 +87,12 @@ func WithLabels(labels map[string]string) InstanceOption {
 func WithTimeout(timeout time.Duration) InstanceOption {
 	return func(i *Instance) {
 		i.timeout = timeout
+	}
+}
+
+func WithEnv(env ...string) InstanceOption {
+	return func(i *Instance) {
+		i.env = append(i.env, env...)
 	}
 }
 
@@ -299,6 +307,10 @@ func (i *Instance) startLocalstack(ctx context.Context, services ...Service) err
 		if addedServices > 0 {
 			environmentVariables = append(environmentVariables, startServices)
 		}
+	}
+
+	if len(i.env) > 0 {
+		environmentVariables = append(environmentVariables, i.env...)
 	}
 
 	resp, err := i.cli.ContainerCreate(ctx,
